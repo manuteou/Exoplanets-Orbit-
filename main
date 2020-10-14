@@ -1,0 +1,136 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import r2_score
+
+# importing dataset
+
+data = pd.read_csv(r'C:\Users\froge\pythonExo\PSCompPars.csv')
+
+data.isna().sum()
+
+## Preprocessing dataset ##
+
+# planet number's selection
+
+data_selection = data[data['sy_pnum'] > 1]
+data_work = data_selection[["pl_orbsmax", "pl_bmassj", "st_mass", "pl_radj"]].dropna()
+data_work.isna().sum()
+
+# Clean extreme values
+
+minval = np.percentile(data_work['pl_orbsmax'], 2)
+maxval = np.percentile(data_work['pl_orbsmax'], 98)
+data_work = data_work[(data_work['pl_orbsmax']> minval) & (data_work['pl_orbsmax'] < maxval)]
+
+minval = np.percentile(data_work['pl_bmassj'], 2)
+maxval = np.percentile(data_work['pl_bmassj'], 98)
+data_work = data_work[(data_work['pl_bmassj'] > minval) & (data_work['pl_bmassj'] < maxval)]
+
+minval = np.percentile(data_work['st_mass'], 2)
+maxval = np.percentile(data_work['st_mass'], 98)
+data_work = data_work[(data_work['st_mass'] > minval) & (data_work['st_mass'] < maxval)]
+
+minval = np.percentile(data_work['pl_radj'], 2)
+maxval = np.percentile(data_work['pl_radj'], 98)
+data_work = data_work[(data_work['pl_radj']> minval) & (data_work['pl_radj'] < maxval)]
+
+# Square root (Masse star * Mass planet)
+
+data_work["produit_mass"] = data_work["st_mass"] * data_work["pl_bmassj"]
+data_work["sqrt_produit_mass"] = data_work["produit_mass"].apply(lambda x: np.sqrt(x))
+
+
+# Dataset visu
+
+data_work['pl_orbsmax'].hist()
+plt.show()
+
+data_work['pl_bmassj'].hist()
+plt.show()
+
+data_work['st_mass'].hist()
+plt.show()
+
+data_work['produit_mass'].hist()
+plt.show()
+
+data_work['sqrt_produit_mass'].hist()
+plt.show()
+
+data_work.plot.scatter('pl_bmassj', 'pl_orbsmax', c='st_mass', cmap='viridis')
+data_work.plot.scatter('st_mass', 'pl_orbsmax', )
+data_work.plot.scatter('produit_mass', 'pl_orbsmax')
+data_work.plot.scatter('sqrt_produit_mass', 'pl_orbsmax', c='sqrt_produit_mass', cmap='viridis')
+
+data_lin = data_work
+data_lin["qcut_sqrt_produit"] = pd.qcut(data_work["sqrt_produit_mass"], 20)
+data_lin["middle_produit_cut"] = data_work["qcut_sqrt_produit"].apply(lambda x: (x.left + x.right) / 2)
+data_lin = data_work.groupby("middle_produit_cut")["pl_orbsmax"].mean().reset_index()
+data_lin.plot.scatter("middle_produit_cut", "pl_orbsmax", c='Green', marker='.')
+
+# Separate values
+
+X = data_work[["sqrt_produit_mass", "pl_radj"]]
+# X = data_work[["pl_bmassj","st_mass",pl_radj']]
+Y = data_work[["pl_orbsmax"]]
+
+
+# Divise data_set Train/Test
+
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=0)
+
+# conversion
+
+X_train = X_train.values
+Y_train = Y_train.values
+X_test = X_test.values
+Y_test = Y_test.values
+
+## TRAIN PIPELINE ##
+# Standardisation
+
+numeric_transformer = StandardScaler()
+X_train = numeric_transformer.fit_transform(X_train)
+
+# Training model
+
+model = LinearRegression().fit(X_train, Y_train)
+
+# Performance
+
+Y_train_pred = model.predict(X_train)
+
+## TEST PIPELINE ##
+# Standardisation
+
+X_test = numeric_transformer.transform(X_test)
+
+# Prediction on test
+
+Y_test_pred = model.predict(X_test)
+
+# Performance
+
+# Print R^2 scores
+
+print("R2 score on training set : ", r2_score(Y_train, Y_train_pred))
+print("R2 score on test set : ", r2_score(Y_test, Y_test_pred))
+
+# Solar_system test
+
+data_ss = pd.read_csv('Solar_system.csv')
+data_ss.describe()
+data_ss["produit_mass"] = data_ss["st_mass"] * data_ss["pl_bmassj"]
+data_ss["sqrt_produit_mass"] = data_ss["produit_mass"].apply(lambda x: np.sqrt(x))
+data_ss.describe()
+X_Ts = data_ss[["sqrt_produit_mass", 'pl_radj']].values
+X_Ts = numeric_transformer.transform(X_Ts)
+# X = data_ss[["pl_bmassj","st_mass"]]
+Y_Ts = data_ss['pl_orbsmax'].values.reshape(8, 1)
+Y_train_pred_s = model.predict(X_Ts)
+result = (Y_Ts - Y_train_pred_s)/Y_Ts
+print(result)
